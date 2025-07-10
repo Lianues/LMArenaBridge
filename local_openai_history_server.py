@@ -11,6 +11,12 @@ import time
 import json
 import re
 from datetime import datetime, timezone
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 构建 models.json 和 config.jsonc 的绝对路径
+MODELS_JSON_PATH = os.path.join(SCRIPT_DIR, 'models.json')
+CONFIG_JSONC_PATH = os.path.join(SCRIPT_DIR, 'config.jsonc')
 
 # --- 配置 ---
 log = logging.getLogger('werkzeug')
@@ -75,11 +81,12 @@ def update_models_json_file(new_models: list):
         return
 
     try:
-        with open('models.json', 'r+', encoding='utf-8') as f:
+        # 【修改点 1】使用绝对路径变量 MODELS_JSON_PATH
+        with open(MODELS_JSON_PATH, 'r+', encoding='utf-8') as f:
             try:
                 existing_models = json.load(f)
             except json.JSONDecodeError:
-                print("⚠️ [Model Updater] 'models.json' 文件已损坏或为空。将创建新内容。")
+                print(f"⚠️ [Model Updater] '{MODELS_JSON_PATH}' 文件已损坏或为空。将创建新内容。")
                 existing_models = {}
 
             added_count = 0
@@ -94,23 +101,24 @@ def update_models_json_file(new_models: list):
                     newly_added_names.append(model_name)
 
             if added_count > 0:
-                print(f"✨ [Model Updater] 发现 {added_count} 个新模型！正在更新 'models.json'...")
+                print(f"✨ [Model Updater] 发现 {added_count} 个新模型！正在更新 '{MODELS_JSON_PATH}'...")
                 for name in newly_added_names:
                     print(f"  -> 新增: {name}")
                 
                 f.seek(0)
                 json.dump(existing_models, f, indent=4)
                 f.truncate()
-                print("✅ [Model Updater] 'models.json' 文件更新成功。")
+                print(f"✅ [Model Updater] '{MODELS_JSON_PATH}' 文件更新成功。")
             else:
-                print("✅ [Model Updater] 检查完毕，所有模型均已存在于 'models.json'。无需更新。")
+                print(f"✅ [Model Updater] 检查完毕，所有模型均已存在于 '{MODELS_JSON_PATH}'。无需更新。")
 
     except FileNotFoundError:
-        print("⚠️ [Model Updater] 'models.json' 文件未找到。正在创建新文件...")
-        with open('models.json', 'w', encoding='utf-8') as f:
+        print(f"⚠️ [Model Updater] '{MODELS_JSON_PATH}' 文件未找到。正在创建新文件...")
+        # 【修改点 2】使用绝对路径变量 MODELS_JSON_PATH
+        with open(MODELS_JSON_PATH, 'w', encoding='utf-8') as f:
             models_to_write = {model['name']: model['id'] for model in new_models}
             json.dump(models_to_write, f, indent=4)
-            print(f"✅ [Model Updater] 成功创建 'models.json' 并添加了 {len(models_to_write)} 个模型。")
+            print(f"✅ [Model Updater] 成功创建 '{MODELS_JSON_PATH}' 并添加了 {len(models_to_write)} 个模型。")
 
 
 # --- 全局会话缓存 ---
@@ -123,8 +131,8 @@ LAST_CONVERSATION_STATE = None
 def get_config():
     """读取并返回 config.jsonc 的内容，同时移除注释。"""
     try:
-        # 注意这里的路径，相对于服务器脚本的位置
-        with open('config.jsonc', 'r', encoding='utf-8') as f:
+        # 【修改点】使用绝对路径变量 CONFIG_JSONC_PATH
+        with open(CONFIG_JSONC_PATH, 'r', encoding='utf-8') as f:
             # 读取文件内容
             jsonc_content = f.read()
             # 移除单行和多行注释
@@ -136,10 +144,10 @@ def get_config():
             config_data = json.loads(json_content)
             return jsonify(config_data)
     except FileNotFoundError:
-        print("❌ 错误: 'config.jsonc' 文件未找到。")
+        print(f"❌ 错误: '{CONFIG_JSONC_PATH}' 文件未找到。")
         return jsonify({"error": "Config file not found"}), 404
     except json.JSONDecodeError:
-        print("❌ 错误: 'config.jsonc' 文件格式不正确。")
+        print(f"❌ 错误: '{CONFIG_JSONC_PATH}' 文件格式不正确。")
         return jsonify({"error": "Config file is malformed"}), 500
 
 @app.route('/reset_state', methods=['POST'])
@@ -159,13 +167,13 @@ def index():
 def load_model_map():
     """从 models.json 加载模型映射"""
     try:
-        with open('models.json', 'r', encoding='utf-8') as f:
+        with open(MODELS_JSON_PATH, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        print("❌ 错误: 'models.json' 文件未找到。请确保该文件存在。")
+        print(f"❌ 错误: '{MODELS_JSON_PATH}' 文件未找到。请确保该文件存在。")
         return {}
     except json.JSONDecodeError:
-        print("❌ 错误: 'models.json' 文件格式不正确。")
+        print(f"❌ 错误: '{MODELS_JSON_PATH}' 文件格式不正确。")
         return {}
 
 MODEL_NAME_TO_ID_MAP = load_model_map()
