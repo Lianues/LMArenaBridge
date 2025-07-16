@@ -121,7 +121,7 @@
                 evaluationId: null,
                 evaluationSessionId: session_id, // 使用从后端传递的 session_id
                 parentMessageIds: parentIds,
-                experimental_attachments: [],
+                experimental_attachments: template.attachments || [],
                 failureReason: null,
                 metadata: null,
                 // 使用从后端 payload 的 message_templates 中传递过来的 participantPosition
