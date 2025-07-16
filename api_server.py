@@ -403,58 +403,94 @@ def save_config():
         logger.error(f"❌ 写入 config.jsonc 时发生错误: {e}", exc_info=True)
 
 
-def _normalize_message_content(message: dict) -> dict:
+def _process_openai_message(message: dict) -> dict:
     """
-    处理和规范化来自 OpenAI 请求的单条消息。
-    - 将多模态内容列表转换为纯文本。
+    处理OpenAI消息，分离文本和附件。
+    - 将多模态内容列表分解为纯文本和附件列表。
     - 确保 user 角色的空内容被替换为空格，以避免 LMArena 出错。
+    - 为附件生成基础结构。
     """
     content = message.get("content")
-    
-    if isinstance(content, list):
-        text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
-        message["content"] = "\n\n".join(text_parts)
-        content = message["content"]
+    role = message.get("role")
+    attachments = []
+    text_content = ""
 
-    if message.get("role") == "user" and content == "":
-        message["content"] = " "
+    if isinstance(content, list):
         
-    return message
+        text_parts = []
+        for part in content:
+            if part.get("type") == "text":
+                text_parts.append(part.get("text", ""))
+            elif part.get("type") == "image_url":
+                image_url_data = part.get("image_url", {})
+                url = image_url_data.get("url")
+                if url and url.startswith("data:image"):
+                    try:
+                        content_type = url.split(';')[0].split(':')[1]
+                        file_extension = content_type.split('/')[1] if '/' in content_type else 'png'
+                        file_name = f"image_{uuid.uuid4()}.{file_extension}"
+                        
+                        attachments.append({
+                            "name": file_name,
+                            "contentType": content_type,
+                            "url": url
+                        })
+                    except IndexError:
+                        logger.warning(f"无法解析的 base64 data URI: {url[:50]}...")
+
+        text_content = "\n\n".join(text_parts)
+    elif isinstance(content, str):
+        text_content = content
+
+    
+    if role == "user" and not text_content.strip():
+        text_content = " "
+
+    return {
+        "role": role,
+        "content": text_content,
+        "attachments": attachments
+    }
 
 def convert_openai_to_lmarena_payload(openai_data: dict, session_id: str, message_id: str) -> dict:
     """
     将 OpenAI 请求体转换为油猴脚本所需的简化载荷，并应用酒馆模式、绕过模式以及对战模式。
     """
-    # 1. 规范化所有消息
-    normalized_messages = [_normalize_message_content(msg.copy()) for msg in openai_data.get("messages", [])]
+    # 1. 处理所有消息，分离文本和附件
+    processed_messages = [_process_openai_message(msg.copy()) for msg in openai_data.get("messages", [])]
 
     # 2. 应用酒馆模式 (Tavern Mode)
     if CONFIG.get("tavern_mode_enabled"):
-        system_prompts = [msg['content'] for msg in normalized_messages if msg['role'] == 'system']
-        other_messages = [msg for msg in normalized_messages if msg['role'] != 'system']
+        system_prompts = [msg['content'] for msg in processed_messages if msg['role'] == 'system']
+        other_messages = [msg for msg in processed_messages if msg['role'] != 'system']
         
         merged_system_prompt = "\n\n".join(system_prompts)
         final_messages = []
         
         if merged_system_prompt:
-            final_messages.append({"role": "system", "content": merged_system_prompt})
+            # 系统消息不应有附件
+            final_messages.append({"role": "system", "content": merged_system_prompt, "attachments": []})
         
         final_messages.extend(other_messages)
-        normalized_messages = final_messages
+        processed_messages = final_messages
 
     # 3. 确定目标模型 ID
     model_name = openai_data.get("model", "claude-3-5-sonnet-20241022")
     target_model_id = MODEL_NAME_TO_ID_MAP.get(model_name, DEFAULT_MODEL_ID)
     
-    # 4. 构建消息模板 (只保留 role 和 content)
+    # 4. 构建消息模板
     message_templates = []
-    for msg in normalized_messages:
-        message_templates.append({"role": msg["role"], "content": msg.get("content", "")})
+    for msg in processed_messages:
+        message_templates.append({
+            "role": msg["role"],
+            "content": msg.get("content", ""),
+            "attachments": msg.get("attachments", [])
+        })
 
     # 5. 应用绕过模式 (Bypass Mode)
     if CONFIG.get("bypass_enabled"):
         # 绕过模式总是添加一个 position 'a' 的用户消息
-        message_templates.append({"role": "user", "content": " ", "participantPosition": "a"})
+        message_templates.append({"role": "user", "content": " ", "participantPosition": "a", "attachments": []})
 
     # 6. 应用参与者位置 (Participant Position)
     mode = CONFIG.get("id_updater_last_mode", "direct_chat")
