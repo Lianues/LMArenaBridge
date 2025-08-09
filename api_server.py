@@ -1020,15 +1020,6 @@ async def start_id_capture():
         raise HTTPException(status_code=500, detail="Failed to send command via WebSocket.")
 
 
-# --- 主程序入口 ---
-if __name__ == "__main__":
-    # 建议从 config.jsonc 中读取端口，此处为临时硬编码
-    api_port = 5102
-    logger.info(f"🚀 LMArena Bridge v2.0 API 服务器正在启动...")
-    logger.info(f"   - 监听地址: http://127.0.0.1:{api_port}")
-    logger.info(f"   - WebSocket 端点: ws://127.0.0.1:{api_port}/ws")
-    
-    uvicorn.run(app, host="0.0.0.0", port=api_port)
 
 @app.post("/v1/images/generations")
 async def images_generations(request: Request):
