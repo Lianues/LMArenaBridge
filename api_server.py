@@ -906,6 +906,55 @@ async def chat_completions(request: Request):
         logger.warning(f"请求的模型 '{model_name}' 不在 models.json 中，将使用默认模型ID。")
 
     request_id = str(uuid.uuid4())
+    response_channels[request_id] = asyncio.Queue()
+    logger.info(f"API CALL [ID: {request_id[:8]}]: 已创建响应通道。")
+
+    try:
+        lmarena_payload = convert_openai_to_lmarena_payload(
+            openai_req,
+            session_id,
+            message_id,
+            mode_override=mode_override,
+            battle_target_override=battle_target_override
+        )
+        
+        message_to_browser = {
+            "request_id": request_id,
+            "payload": lmarena_payload
+        }
+        
+        logger.info(f"API CALL [ID: {request_id[:8]}]: 正在通过 WebSocket 发送载荷到油猴脚本。")
+        await browser_ws.send_text(json.dumps(message_to_browser))
+
+        is_stream = openai_req.get("stream", True)
+
+        if is_stream:
+            return StreamingResponse(
+                stream_generator(request_id, model_name or "default_model"),
+                media_type="text/event-stream"
+            )
+        else:
+            return await non_stream_response(request_id, model_name or "default_model")
+    except Exception as e:
+        if request_id in response_channels:
+            del response_channels[request_id]
+        logger.error(f"API CALL [ID: {request_id[:8]}]: 处理请求时发生致命错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/v1/images/generations")
+async def images_generations(request: Request):
+    """
+    处理文生图请求。
+    该端点接收 OpenAI 格式的图像生成请求，并返回相应的图像 URL。
+    """
+    global last_activity_time
+    last_activity_time = datetime.now()
+    logger.info(f"文生图 API 请求已收到，活动时间已更新为: {last_activity_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    response_data, status_code = await image_generation.handle_image_generation_request(request, browser_ws)
+    
+    return JSONResponse(content=response_data, status_code=status_code)
+
 @app.post("/internal/request_model_update")
 async def request_model_update():
     """
@@ -951,47 +1000,35 @@ async def update_available_models_endpoint(request: Request):
             content={"status": "error", "message": "Could not extract model data from HTML."}
         )
 
-    response_channels[request_id] = asyncio.Queue()
-    logger.info(f"API CALL [ID: {request_id[:8]}]: 已创建响应通道。")
-
+@app.post("/internal/start_id_capture")
+async def start_id_capture():
+    """
+    接收来自 id_updater.py 的通知，并通过 WebSocket 指令
+    激活油猴脚本的 ID 捕获模式。
+    """
+    if not browser_ws:
+        logger.warning("ID CAPTURE: 收到激活请求，但没有浏览器连接。")
+        raise HTTPException(status_code=503, detail="Browser client not connected.")
+    
     try:
-        # 1. 转换请求，传入可能存在的模式覆盖信息
-        lmarena_payload = convert_openai_to_lmarena_payload(
-            openai_req,
-            session_id,
-            message_id,
-            mode_override=mode_override,
-            battle_target_override=battle_target_override
-        )
-        
-        # 2. 包装成发送给浏览器的消息
-        message_to_browser = {
-            "request_id": request_id,
-            "payload": lmarena_payload
-        }
-        
-        # 3. 通过 WebSocket 发送
-        logger.info(f"API CALL [ID: {request_id[:8]}]: 正在通过 WebSocket 发送载荷到油猴脚本。")
-        await browser_ws.send_text(json.dumps(message_to_browser))
-
-        # 4. 根据 stream 参数决定返回类型
-        is_stream = openai_req.get("stream", True)
-
-        if is_stream:
-            # 返回流式响应
-            return StreamingResponse(
-                stream_generator(request_id, model_name or "default_model"),
-                media_type="text/event-stream"
-            )
-        else:
-            # 返回非流式响应
-            return await non_stream_response(request_id, model_name or "default_model")
+        logger.info("ID CAPTURE: 收到激活请求，正在通过 WebSocket 发送指令...")
+        await browser_ws.send_text(json.dumps({"command": "activate_id_capture"}))
+        logger.info("ID CAPTURE: 激活指令已成功发送。")
+        return JSONResponse({"status": "success", "message": "Activation command sent."})
     except Exception as e:
-        # 如果在设置过程中出错，清理通道
-        if request_id in response_channels:
-            del response_channels[request_id]
-        logger.error(f"API CALL [ID: {request_id[:8]}]: 处理请求时发生致命错误: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"ID CAPTURE: 发送激活指令时出错: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to send command via WebSocket.")
+
+
+# --- 主程序入口 ---
+if __name__ == "__main__":
+    # 建议从 config.jsonc 中读取端口，此处为临时硬编码
+    api_port = 5102
+    logger.info(f"🚀 LMArena Bridge v2.0 API 服务器正在启动...")
+    logger.info(f"   - 监听地址: http://127.0.0.1:{api_port}")
+    logger.info(f"   - WebSocket 端点: ws://127.0.0.1:{api_port}/ws")
+    
+    uvicorn.run(app, host="0.0.0.0", port=api_port)
 
 @app.post("/v1/images/generations")
 async def images_generations(request: Request):
