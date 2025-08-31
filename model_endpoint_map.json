@@ -1,32 +1,32 @@
 {
-  "o3-xxx": [
-    {
-      "session_id": "b2096d33-2651-4802-97c1-c9b788c01c7a",
-      "message_id": "151968ec-b43f-4d0b-a655-e508156af578",
-      "mode": "direct_chat"
+    "o3-xxx": [
+        {
+            "session_id": "b2096d33-2651-4802-97c1-c9b788c01c7a",
+            "message_id": "151968ec-b43f-4d0b-a655-e508156af578",
+            "mode": "direct_chat"
+        },
+        {
+            "session_id": "session_for_battle_A",
+            "message_id": "message_for_battle_A",
+            "mode": "battle",
+            "battle_target": "A"
+        },
+        {
+            "session_id": "session_for_battle_B",
+            "message_id": "message_for_battle_B",
+            "mode": "battle",
+            "battle_target": "B"
+        }
+    ],
+    "gemini-xxx": {
+        "session_id": "session_for_battle_A",
+        "message_id": "message_for_battle_A",
+        "mode": "battle",
+        "battle_target": "A"
     },
-    {
-      "session_id": "session_for_battle_A",
-      "message_id": "message_for_battle_A",
-      "mode": "battle",
-      "battle_target": "A"
-    },
-    {
-      "session_id": "session_for_battle_B",
-      "message_id": "message_for_battle_B",
-      "mode": "battle",
-      "battle_target": "B"
-    }
-  ],
-  "gemini-xxx": {
-      "session_id": "session_for_battle_A",
-      "message_id": "message_for_battle_A",
-      "mode": "battle",
-      "battle_target": "A"
-    },
-  "nano-banana": {
-      "session_id": "4261456c-7c1d-4f09-932a-7400d2974ff4",
-      "message_id": "5b2271af-85ca-4dd7-8554-36b5b091642f",
-      "mode": "direct_chat"
+    "nano-banana": {
+        "session_id": "4261456c-7c1d-4f09-932a-7400d2974ff4",
+        "message_id": "5b2271af-85ca-4dd7-8554-36b5b091642f",
+        "mode": "direct_chat"
     }
 }

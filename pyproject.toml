@@ -1,0 +1,22 @@
+[project]
+name = "lmarenabridge"
+version = "0.1.0"
+description = "LMArena Bridge - API桥接服务与CLI管理工具"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "fastapi>=0.116.1",
+    "httpx>=0.28.1",
+    "packaging>=25.0",
+    "requests>=2.32.5",
+    "uvicorn[standard]>=0.35.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+]
+
+[project.scripts]
+lmarena-cli = "modules.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["modules*"]
